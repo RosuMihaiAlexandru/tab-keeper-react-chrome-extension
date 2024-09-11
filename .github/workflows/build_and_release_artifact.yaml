@@ -1,0 +1,53 @@
+name: Build and release artifact tab-keeper-react-chrome-extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and release artifact
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+
+      - name: Install dependencies
+        uses: bahmutov/npm-install@v1
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Get version from manifest
+        id: version
+        uses: notiz-dev/github-action-json-property@release
+        with:
+          path: 'public/manifest.json'
+          prop_path: 'version'
+
+      - name: Generate dist folder
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+        run: npm run build
+
+      - name: Prune unused remotely hosted Firebase JS SDK calls
+        run: |
+          INDEX_FILE=$(find ./dist/assets -name 'index-*.js')
+          sed -i 's|https://apis.google.com/js/api.js?onload=${a}||g' $INDEX_FILE
+
+      - name: Upload release zip file ready for Chrome Web Store
+        uses: actions/upload-artifact@v3
+        with:
+          name: tab-keeper-react-chrome-extension-v${{steps.version.outputs.prop}}
+          path: ./dist/
